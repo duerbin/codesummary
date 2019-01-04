@@ -1,0 +1,15 @@
+#/bin/bash
+#set -v   
+
+## scp $1 dueb@10.130.29.91:~/4mac
+if [ $# -ne 1 ] 
+then
+	echo "error para"
+	echo "$0 [-d] filename" 
+	exit
+fi
+
+echo "scp begin: $1"
+sshpass -p dueb scp $1 dueb@10.130.29.91:~/4mac
+echo "scp end"
+
