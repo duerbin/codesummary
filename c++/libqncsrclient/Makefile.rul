@@ -1,0 +1,227 @@
+###############################################################################
+# 
+# Generic Makefile 
+# 
+# writen by Lin Weizhi
+# email: weizhi@vip.sina.com
+# 
+# Copyright (c) 2004 linwz
+# All rights reserved.
+#
+# You are free to modify and distribute this without giving 
+# credit to me.  linwz, 2004-05-18
+#
+# Usage: make [build | rebuild | clean | release]
+#
+###############################################################################
+
+#------------------------------------------------------------------------------
+# Include other config file if necessary.
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# You shouldn't need to change anything below this point.
+#------------------------------------------------------------------------------
+
+# 去除空格
+EXE_PREFIX = $(strip $(EXECUTABLE))
+DLL_POSTFIX = $(strip $(POSTFIX))
+
+UNIX := $(shell pwd)
+
+ICE_SRC_INPUT 		= $(wildcard $(ICE_INPUT))
+ICE_OUTPUT			= $(patsubst %.ice,%.cpp,$(ICE_SRC_INPUT))
+ICE_SOURCE_OUTPUT	= $(notdir $(patsubst %.ice,%.cpp,$(ICE_SRC_INPUT)))
+
+VERSION_MAJOR = 4
+VERSION_MINOR = 5
+REVISION_NUMBER = 1 
+BUILD_NUMBER = 1
+VERSION_START_YEAR = 2016 
+VERSION_START_MONTH = 4
+CURRENT_YEAR = $(shell date +%Y)
+CURRENT_MONTH = $(shell date +%m)
+OVER_MONTH = 0
+RELEASE_VERSION = 4.5.7.1
+
+all:prehook slice build
+prehook:
+	@if [ -d ./.git ] && [ -f ./include/Revision.h ]; then        \
+		rm -f ./include/Revision.h; \
+		printf "%10s %-20s\n" [RM] Revision.h; \
+	fi
+	
+	@if [ -d ./.git ] || [ ! -f ./include/Revision.h ]; then \
+		( \
+			echo "//////////////////////////////////////////////////////////////////////////////"; \
+            echo "//"; \
+            echo "// Call Center On Demand Product Series"; \
+            echo "// Copyright (C) 2008 ChannelSoft(Beijing.) Technology Ltd., Co."; \
+            echo "// All rights reserved."; \
+            echo "//"; \
+            echo "//////////////////////////////////////////////////////////////////////////////"; \
+            echo ""; \
+            echo "#ifndef _REVISION_H_"; \
+            echo "#define _REVISION_H_"; \
+            echo ""; \
+            echo "// 编译时增加git版本号, 该文件不能传上git源码库"; \
+			if [ $(CURRENT_YEAR) -gt $(VERSION_START_YEAR) ] ; then \
+				GT_YEAR=`expr $(CURRENT_YEAR) - $(VERSION_START_YEAR)`; \
+				GT_MONTH=`expr $$GT_YEAR \* 12`; \
+				OVER_MONTH=`expr $$GT_MONTH + $(CURRENT_MONTH) - $(VERSION_START_MONTH)`; \
+			elif [ $(CURRENT_YEAR) -eq $(VERSION_START_YEAR) ]; then \
+				if [ $(CURRENT_MONTH) -gt $(VERSION_START_MONTH) ] ; then \
+					OVER_MONTH=`expr $(CURRENT_MONTH) - $(VERSION_START_MONTH)`;  \
+				fi; \
+			fi; \
+			if [ $$OVER_MONTH -gt 0 ]; then \
+				OVER_REVISION=`expr $$OVER_MONTH / 3`; \
+				NEW_REVISION_NUMBER=`expr $(REVISION_NUMBER) + $$OVER_REVISION`; \
+				OVER_BUILD=`expr $$OVER_MONTH % 3`; \
+				OVER_NUMBER=`expr $(BUILD_NUMBER) + $$OVER_BUILD`; \
+			fi; \
+			RELEASE_VERSION=$(VERSION_MAJOR).$(VERSION_MINOR).$$NEW_REVISION_NUMBER.$$OVER_NUMBER; \
+			echo "";\
+			cd $(UNIX); \
+			echo -n '#define RELEASE_VERSION "'$$RELEASE_VERSION'"'; \
+			echo ""; \
+			echo -n '#define GIT_REVISION_NUM "'; \
+						if [ -d .git ]; then \
+                                echo -n `git show -q | head -1` | sed 's/commit //'; \
+                        else \
+                                (echo -n "release"); \
+                        fi; \
+                        echo '"'; \
+			cd $(UNIX); \
+			echo -n '#define GIT_REPOSITY "'; \
+                        if [ -d ./.git ]; then \
+                                cd .git; echo -n `git remote -v | head -1` | sed 's/origin //' | sed 's/ (fetch)//'; \
+                        else \
+                                (echo -n "release"); \
+                        fi; \
+                        echo '"'; \
+			echo -n '#define BUILD_TIME "'; \
+			(echo -n `date "+%x %X"`); \
+			echo '"'; \
+			echo -n '#define BUILD_BY "'; \
+			(echo -n `whoami`); \
+			echo '"'; \
+			echo -n '#define BUILD_AT "'; \
+			(echo -n `hostname`); \
+			echo '"'; \
+			echo ""; \
+                        echo "#include <stdio.h>"; \
+                        echo ""; \
+                        echo ""; \
+                        echo 'static void print_version()'; \
+                        echo '{'; \
+                        echo 'printf("***********************************************************************************\n");'; \
+                        echo 'printf(" CCOD version: "RELEASE_VERSION"\n");'; \
+                        echo 'printf(" Server Revision: "GIT_REVISION_NUM"\n");'; \
+                        echo 'printf(" Git Reposity: "GIT_REPOSITY"\n");'; \
+                        echo 'printf(" Build Info: build by "BUILD_BY" at "BUILD_AT" on "BUILD_TIME"\n");'; \
+                        echo 'printf(" Channelsoft(Beijing) Technologiges Co.,Ltd.\n");'; \
+                        echo 'printf(" All rights reserved.""\n");'; \
+                        echo 'printf("***********************************************************************************\n");'; \
+                        echo '}'; \
+                        echo ""; \
+			echo "#endif  // _REVISION_H_"; \
+		) > ./include/Revision.h; \
+		printf "%10s %-20s\n" [STAMP] Revision.h;  \
+	fi
+
+slice:$(ICE_OUTPUT)
+	@if [ $(SLICE_MAKE) == "yes" ]; then \
+		export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./deps/ice/lib; \
+	fi
+
+build:$(EXE_PREFIX).$(DLL_POSTFIX)
+#	@cp $(EXE_PREFIX) $(DEST_LIB)/lib$(EXE_PREFIX).$(LIB_DLL_POSTFIX)
+#	@rm $(EXE_PREFIX) $(_OBJS)
+
+$(EXE_PREFIX).$(DLL_POSTFIX):$(_OBJS)
+#@echo [`date "+%Y-%m-%d %H:%M:%S"`] Link ......
+
+ifeq ($(DLL_POSTFIX),exe)
+	$(CPP) -o $(EXE_PREFIX).$(DLL_POSTFIX) $(EXE_LINK_FLAG) $(_OBJS) $(addprefix -L,$(LIB_PATH)) $(addprefix -l,$(LIBS))
+	@if [ ! -d $(DEST_EXE) ]; then \
+		mkdir $(DEST_EXE); \
+	fi
+	@echo
+	mv $(EXE_PREFIX).$(DLL_POSTFIX) $(DEST_EXE)/$(EXE_PREFIX)
+endif
+ifeq ($(DLL_POSTFIX),dll)
+	$(CPP) -o $(EXE_PREFIX).$(DLL_POSTFIX) $(LIB_LINK_FLAG) $(_OBJS) $(addprefix -L,$(LIB_PATH)) $(addprefix -l,$(LIBS))
+	@if [ ! -d $(DEST_LIB) ]; then \
+		mkdir $(DEST_LIB); \
+	fi
+	@echo
+	mv $(EXE_PREFIX).$(DLL_POSTFIX) $(DEST_LIB)/lib$(EXE_PREFIX).$(LIB_POSTFIX)
+endif
+ifeq ($(DLL_POSTFIX),lib)
+	ar $(PLATFORM_AR_PARAM) $(EXE_PREFIX).$(DLL_POSTFIX) $(_OBJS)
+	ranlib $(EXE_PREFIX).$(DLL_POSTFIX)
+	@if [ ! -d $(DEST_LIB) ]; then \
+		mkdir $(DEST_LIB); \
+	fi
+	@echo
+	mv $(EXE_PREFIX).$(DLL_POSTFIX) $(DEST_LIB)/lib$(EXE_PREFIX).$(LIB_POSTFIX)
+endif
+#@echo [`date "+%Y-%m-%d %H:%M:%S"`] Build complete.
+	@echo
+
+%.o:%.cpp 
+	@echo
+#@echo [`date "+%Y-%m-%d %H:%M:%S"`] Compile $< ......
+	$(CPP) -c $< $(CXXFLAGS) $(addprefix -I,$(INCLUDE_PATH))
+
+%.o:%.c
+	@echo
+#@echo [`date "+%Y-%m-%d %H:%M:%S"`] Compile $< ......
+	$(CC) -c $< $(CFLAGS) $(CPPFLAGS) $(addprefix -I,$(INCLUDE_PATH))
+
+%.cpp:%.ice
+	@echo "$(ICE_SLICE) [$<] -> $(ICE_OUTPUT_DIR)"
+	@export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:./deps/ice/lib; \
+	$(ICE_SLICE) $< --output-dir $(ICE_OUTPUT_DIR) -I. -I$(SLICE_DIR) -I$(INTERFACE_HOME)/glsserver -I$(INTERFACE_HOME)/sd_apg -I$(INTERFACE_HOME)/ucxserver
+ 
+.PHONY: rebuild # $(EXE_PREFIX)
+
+rebuild:clean build
+
+release:rebuild
+	@rm -f $(_OBJS)
+	@mkdir -p $(PRODUCT_RELEASE_PATH)/$(RPM_MODULE_NAME)
+	@cp -r ../. $(PRODUCT_RELEASE_PATH)/$(RPM_MODULE_NAME)
+	@echo [`date "+%Y-%m-%d %H:%M:%S"`] Release complete.
+	@echo
+
+cleanice:
+	@if [ $(SLICE_MAKE) == "yes" ]; then \
+		clear; \
+		echo "   rm [$(ICE_OUTPUT_DIR)] - $(ICE_SOURCE_OUTPUT)"; \
+		rm -f $(addprefix $(ICE_OUTPUT_DIR)/,$(ICE_SOURCE_OUTPUT)); \
+		echo "   rm [$(ICE_OUTPUT_DIR)] - $(patsubst %.cpp,%.h,$(ICE_SOURCE_OUTPUT))"; \
+		rm -f $(addprefix $(ICE_OUTPUT_DIR)/,$(patsubst %.cpp,%.h,$(ICE_SOURCE_OUTPUT))); \
+	fi
+
+clean:cleanice
+	@rm -f $(_OBJS)
+
+ifeq ($(DLL_POSTFIX),exe)
+	@rm -f $(DEST_EXE)/$(EXE_PREFIX)
+endif
+ifeq ($(DLL_POSTFIX),dll)
+	@rm -f $(DEST_LIB)/lib$(EXE_PREFIX).$(LIB_POSTFIX)
+endif
+ifeq ($(DLL_POSTFIX),lib)
+	@rm -f $(DEST_LIB)/lib$(EXE_PREFIX).$(LIB_POSTFIX)
+endif
+
+	@if [ -f ./include/Revision.h ]; then \
+		rm -f ./include/Revision.h; \
+	fi
+	@echo [`date "+%Y-%m-%d %H:%M:%S"`] Clean complete.
+
+#------------------------------------------------------------------------------
+# End of Makefile 
+#-----------------------------------------------------------------------------
